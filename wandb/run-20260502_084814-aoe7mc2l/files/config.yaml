@@ -1,0 +1,29 @@
+_wandb:
+    value:
+        cli_version: 0.26.1
+        e:
+            4dsr0tps1srqlz03m84kpirtrzuamzgi:
+                codePath: log_to_wandb.py
+                codePathLocal: log_to_wandb.py
+                email: 22100356@handong.ac.kr
+                executable: /home/trans4/miniconda3/envs/B_test/bin/python
+                git:
+                    commit: c12e6174be861744a52189c230089e3e38d89129
+                    remote: https://github.com/libeineu/fairseq_mmt.git
+                host: milabsv2-B7079F77CV10HR-N
+                os: Linux-6.5.0-1018-oem-x86_64-with-glibc2.35
+                program: /home/trans4/sbj/B_test/log_to_wandb.py
+                python: CPython 3.9.23
+                root: /home/trans4/sbj/B_test
+                startedAt: "2026-05-01T23:48:14.852205Z"
+                writerId: 4dsr0tps1srqlz03m84kpirtrzuamzgi
+        m: []
+        python_version: 3.9.23
+        t:
+            "3":
+                - 2
+                - 13
+            "4": 3.9.23
+            "5": 0.26.1
+            "12": 0.26.1
+            "13": linux-x86_64

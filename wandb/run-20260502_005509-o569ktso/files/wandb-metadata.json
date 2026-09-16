@@ -1,0 +1,17 @@
+{
+  "os":  "Linux-6.5.0-1018-oem-x86_64-with-glibc2.35",
+  "python":  "CPython 3.9.23",
+  "startedAt":  "2026-05-01T15:55:09.658191Z",
+  "program":  "/home/trans4/sbj/B_test/log_to_wandb.py",
+  "codePath":  "log_to_wandb.py",
+  "codePathLocal":  "log_to_wandb.py",
+  "git":  {
+    "remote":  "https://github.com/libeineu/fairseq_mmt.git",
+    "commit":  "c12e6174be861744a52189c230089e3e38d89129"
+  },
+  "email":  "22100356@handong.ac.kr",
+  "root":  "/home/trans4/sbj/B_test",
+  "host":  "milabsv2-B7079F77CV10HR-N",
+  "executable":  "/home/trans4/miniconda3/envs/B_test/bin/python",
+  "writerId":  "d9k9vop3jjwf4x8k3w84y6mi7i9l7jfw"
+}
