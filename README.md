@@ -1,164 +1,108 @@
-This code repository is for the accepted ACL2022 paper "On Vision Features in Multimodal Machine Translation". We provide the details and scripts for the proposed probing tasks. We hope the code could help those who want to research on the multimodal machine translation task.
-# Our dependency
+# Dual-Attention Decoder
 
-* PyTorch version == 1.9.1
-* Python version == 3.6.7
-* timm version == 0.4.12
-* vizseq version == 0.1.15
-* nltk verison == 3.6.4
-* sacrebleu version == 1.5.1
+멀티모달 기계 번역을 위한 듀얼 어텐션 디코더
+Dual-Attention Decoder for Multimodal Machine Translation
 
-# Install fairseq
+[fairseq_mmt](https://github.com/libeineu/fairseq_mmt) (ACL 2022, *On Vision Features in Multimodal Machine Translation*) 포크 기반으로 구현됨.
+
+---
+
+## 한 번에 실행 (훈련 + 테스트)
 
 ```bash
-cd fairseq_mmt
+bash shell.sh <실험이름>
+```
+
+예: `bash shell.sh entropy_test`
+
+이 한 줄이 학습부터 평가까지 전부 돌립니다. 결과는 `checkpoints/multi30k-en2de-vit_base_patch16_384-<실험이름>/` 에 쌓입니다.
+
+`shell.sh`가 순서대로 하는 일:
+
+| 단계 | 내용 | 산출물 |
+|---|---|---|
+| 1 | `fairseq-train` 학습 | `checkpoint*.pt`, `train.log` |
+| 2 | 마지막 10개 체크포인트 평균 | `last10.ensemble.pt` |
+| 3 | test / test1 / test2 번역 + BLEU | `translation_test*.log`, `hypo_test*.sorted` |
+| 4 | METEOR 측정 | `meteor_test*.log` |
+| 5 | CoMMuTE correct/incorrect 스코어링 | `commute_result/final_score_*.log` |
+| 6 | CoMMuTE 정확도 계산 | `commute_result/commute.log` |
+
+테스트셋 이름 대응: `test` = test2016, `test1` = test2017, `test2` = MSCOCO.
+
+실행한 `shell.sh` 사본이 `save_dir`에 함께 복사되므로, 나중에 그 실험의 하이퍼파라미터를 그대로 확인할 수 있습니다.
+
+### 자주 바꾸는 설정
+
+`shell.sh` 상단에서 직접 수정합니다.
+
+```bash
+device=6                        # 사용할 GPU
+image_feat=vit_tiny_patch16_384 # 이미지 피처 (dim은 자동 매핑)
+for task in multi30k-en2de;     # multi30k-en2fr 추가 가능
+```
+
+`image_feat` → 차원 매핑은 스크립트가 알아서 처리합니다:
+`vit_tiny` 192 · `vit_small` 384 · `vit_base` 768 · `vit_large` 1024
+
+
+
+
+## 개별 실행
+
+| 스크립트 | 용도 |
+|---|---|
+| `bash test.sh` | 학습 없이 평가만. 상단의 `name`, `_image_feat`, `test` 변수를 직접 수정해서 사용 |
+| `bash commute.sh <image_feat> <name>` | CoMMuTE만 따로 측정 |
+| `bash map.sh` → `python3 map.py` | 토큰별 attention map 추출 및 시각화 |
+| `python3 visual2.py` | ViT 패치 attention을 원본 이미지 위에 히트맵으로 오버레이 |
+| `bash preprocess.sh` / `preprocess_mmt.sh` | 텍스트 바이너리화 (마스킹 없음 / 마스킹) |
+
+---
+
+## 준비물
+
+### 환경
+
+```bash
 pip install --editable ./
 ```
 
-# Multi30k data & Flickr30k entities
-Multi30k data from [here](https://github.com/multi30k/dataset) and [here](https://www.statmt.org/wmt17/multimodal-task.html)  
-flickr30k entities data from [here](https://github.com/BryanPlummer/flickr30k_entities)  
-Here, We get multi30k text data from [Revisit-MMT](https://github.com/LividWo/Revisit-MMT)
-```bash
-cd fairseq_mmt
-git clone https://github.com/BryanPlummer/flickr30k_entities.git
-cd flickr30k_entities
-unzip annotations.zip
+PyTorch 1.9.1 · Python 3.9 · timm 0.4.12 · vizseq 0.1.15 · nltk 3.6.4 · sacrebleu 1.5.1
 
-# download data and create a directory anywhere
-flickr30k
-├─ flickr30k-images
-├─ test2017-images
-├─ test_2016_flickr.txt
-├─ test_2017_flickr.txt
-├─ test_2017_mscoco.txt
-├─ test_2018_flickr.txt
-├─ testcoco-images
-├─ train.txt
-└─ val.txt
+
+### 데이터
+
+텍스트는 이미 바이너리화되어 있습니다.
+
+```
+data-bin/
+├── multi30k.en-de/          # train/valid/test/test1/test2
+│   ├── correct/             # CoMMuTE 정답 번역
+│   ├── incorrect/           # CoMMuTE 오답 번역
+│   └── mask1~4, maskc, maskp   # 원본 논문의 probing 데이터
+├── multi30k.en-de-auged/
+└── multi30k.en-fr/
 ```
 
-# Extract image feature
-#### 1. Vision Transformer 
-  ```bash
-  # please read scripts/README.md to modify the code of timm firstly!
-  # ⬆ ⬆ ⬆ ⬆ ⬆ ⬆ ⬆ ⬆
-  python3 scripts/get_img_feat.py --dataset train --model vit_base_patch16_384 --path ../flickr30k
-  ```
-  script parameters:
-  - ```dataset```: choices=['train', 'val', 'test2016', 'test2017', 'testcoco']
-  - ```model```:  'vit_base_patch16_384', that you can find in [timm.list_models()](https://github.com/rwightman/pytorch-image-models/)
-  - ```path```:    '/path/to/your/flickr30k'
-  
-#### 2. DETR 
-  ```bash
-  # please run scripts/get_img_feat_detr.py to download DETR offical code and model firstly
-  # then read scripts/README.md to modify detr.py (in DETR offical code) to return image feature
-  # finally, run scripts/get_img_feat_detr.py again to get image feature
-  # ⬆ ⬆ ⬆ ⬆ ⬆ ⬆ ⬆ ⬆
-  python3 scripts/get_img_feat_detr.py --dataset train --path ../flickr30k
-  ```
-  script parameters:
-  - ```dataset```: choices=['train', 'val', 'test2016', 'test2017', 'testcoco']
-  - ```path```:    '/path/to/your/flickr30k'
+### 이미지 피처
 
-# Create masking data
-```bash
-pip3 install stanfordcorenlp 
-wget https://nlp.stanford.edu/software/stanford-corenlp-latest.zip
-unzip stanford-corenlp-latest.zip
+`shell.sh`는 `~/<image_feat>/` 에서 피처를 찾습니다.
 
-cd fairseq_mmt
-cat data/multi30k/train.en data/multi30k/valid.en data/multi30k/test.2016.en > train_val_test2016.en
-python3 get_and_record_noun_from_f30k_entities.py # recording noun and nouns position in each sentence by flickr30k_entities
-python3 record_color_people_position.py
-
-# create en-de masking data
-cd data/masking
-python3 match_origin2bpe_position.py
-python3 create_masking_multi30k.py         # create mask1-4 & color & people data 
-
-sh preprocess_mmt.sh
+```
+~/vit_tiny_patch16_384/
+├── train.pth  valid.pth  test.pth  test1.pth  test2.pth
+└── commute/en-de/          # CoMMuTE용
 ```
 
-# Train and Test
-#### 1. Preprocess(mask1 as an example)
+새로 추출하려면:
+
 ```bash
-src='en'
-tgt='de'
-mask=mask1  # mask1, mask2, mask3, mask4, maskc(color), maskp(character)
-TEXT=data/multi30k-en-$tgt.$mask
-
-fairseq-preprocess --source-lang $src --target-lang $tgt \
-  --trainpref $TEXT/train \
-  --validpref $TEXT/valid \
-  --testpref $TEXT/test.2016,$TEXT/test.2017,$TEXT/test.coco \
-  --destdir data-bin/multi30k.en-$tgt.$mask \
-  --workers 8 --joined-dictionary \
-  --srcdict data/dict.en2de_$mask.txt
+python3 scripts/get_img_feat.py --dataset train --model vit_base_patch16_384 --path ../flickr30k
+python3 scripts/get_img_feat_detr.py --dataset train --path ../flickr30k
 ```
-*sh preprocess.sh to generate no masking data*
-#### 2. Train(mask1 as an example)
-```bash
-mask_data=mask1
-data_dir=multi30k.en-de.mask1
-src_lang='en'
-tgt_lang='de'
-image_feat=vit_base_patch16_384
-tag=$image_feat/$image_feat-$mask_data
-save_dir=checkpoints/multi30k-en2de/$tag
-image_feat_path=data/$image_feat
-image_feat_dim=768
 
-criterion=label_smoothed_cross_entropy
-fp16=1
-lr=0.005
-warmup=2000
-max_tokens=4096
-update_freq=1
-keep_last_epochs=10
-patience=10
-max_update=8000
-dropout=0.3
+ViT는 timm 코드 수정이, DETR은 공식 코드 수정이 선행되어야 합니다 — `scripts/README.md` 참고.
 
-arch=image_multimodal_transformer_SA_top
-SA_attention_dropout=0.1
-SA_image_dropout=0.1
-SA_text_dropout=0
+---
 
-CUDA_VISIBLE_DEVICES=0,1 fairseq-train data-bin/$data_dir
-  --save-dir $save_dir
-  --distributed-world-size 2 -s $src_lang -t $tgt_lang
-  --arch $arch
-  --dropout $dropout
-  --criterion $criterion --label-smoothing 0.1
-  --task image_mmt --image-feat-path $image_feat_path --image-feat-dim $image_feat_dim
-  --optimizer adam --adam-betas '(0.9, 0.98)'
-  --lr $lr --min-lr 1e-09 --lr-scheduler inverse_sqrt --warmup-init-lr 1e-07 --warmup-updates $warmup
-  --max-tokens $max_tokens --update-freq $update_freq --max-update $max_update
-  --find-unused-parameters
-  --share-all-embeddings
-  --patience $patience
-  --keep-last-epochs $keep_last_epochs
-  --SA-image-dropout $SA_image_dropout
-  --SA-attention-dropout $SA_attention_dropout
-  --SA-text-dropout $SA_text_dropout
-```
-*you can run train_mmt.sh instead of scripts above.*
-#### 3. Test(mask1 as an example)
-```bash
-#sh translate_mmt.sh $1 $2
-sh translate_mmt.sh mask1 vit_base_patch16_384  # origin text is mask0
-```
-script parameters:
-- ```$1```: choices=['mask1', 'mask2', 'mask3', 'mask4', 'maskc', 'maskp', 'mask0']
-- ```$2```:  'vit_base_patch16_384', that you can find in [timm.list_models()](https://github.com/rwightman/pytorch-image-models/)
-
-# Visualization
-```bash
-# uncomment line429-431,487-488 in /fairseq/models/image_multimodal_transformer_SA.py
-# decode again, generate tensors to the checkpoint dir
-# prepare files needed in /visualization/visualization.py
-cd visualization
-python3 visualization.py
-```
